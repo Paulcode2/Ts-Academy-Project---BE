@@ -5,7 +5,6 @@ const categorySchema = new mongoose.Schema(
     name: {
       type: String,
       required: [true, "Category name is required."],
-      unique: true,
       trim: true,
       maxlength: [80, "Category name cannot exceed 80 characters."],
     },
@@ -18,9 +17,22 @@ const categorySchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
     },
+    updatedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
   },
   {
     timestamps: true,
+  },
+);
+
+categorySchema.index(
+  { name: 1 },
+  {
+    unique: true,
+    collation: { locale: "en", strength: 2 },
+    name: "category_name_ci_unique",
   },
 );
 

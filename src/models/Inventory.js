@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const validateActiveReference = require("./activeReferenceValidation");
 
 const inventorySchema = new mongoose.Schema(
   {
@@ -33,18 +34,14 @@ inventorySchema.index({ product: 1, location: 1 }, { unique: true });
 inventorySchema.index({ warehouse: 1, product: 1 });
 
 inventorySchema.pre("validate", async function (next) {
-  if (!this.location || !this.warehouse) {
-    return next();
-  }
-
   try {
-    const Location = mongoose.models.Location || require("./Location");
-    const locationDoc = await Location.findById(this.location).lean();
+    const [product, warehouse, location] = await Promise.all([
+      validateActiveReference(this, "product", "Product"),
+      validateActiveReference(this, "warehouse", "Warehouse"),
+      validateActiveReference(this, "location", "Location"),
+    ]);
 
-    if (
-      locationDoc &&
-      String(locationDoc.warehouse) !== String(this.warehouse)
-    ) {
+    if (location && String(location.warehouse) !== String(this.warehouse)) {
       this.invalidate(
         "warehouse",
         "Warehouse must match the selected location's warehouse.",

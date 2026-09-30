@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const { STOCK_MOVEMENT_TYPE_VALUES } = require("../constants");
+const validateActiveReference = require("./activeReferenceValidation");
 
 const stockMovementSchema = new mongoose.Schema(
   {
@@ -64,5 +65,18 @@ const stockMovementSchema = new mongoose.Schema(
 
 stockMovementSchema.index({ product: 1, createdAt: -1 });
 stockMovementSchema.index({ warehouse: 1, location: 1, createdAt: -1 });
+
+stockMovementSchema.pre("validate", async function (next) {
+  try {
+    await Promise.all([
+      validateActiveReference(this, "product", "Product"),
+      validateActiveReference(this, "warehouse", "Warehouse"),
+      validateActiveReference(this, "location", "Location"),
+    ]);
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
 
 module.exports = mongoose.model("StockMovement", stockMovementSchema);
