@@ -8,6 +8,7 @@ const cookieParser = require("cookie-parser");
 const healthRoutes = require("./routes/healthRoutes");
 const authRoutes = require("./routes/authRoutes");
 const userRoutes = require("./routes/userRoutes");
+const masterDataRoutes = require("./routes/masterDataRoutes");
 const notFound = require("./middleware/notFound");
 const errorHandler = require("./middleware/errorHandler");
 
@@ -65,6 +66,7 @@ app.use(cookieParser());
 app.use("/api/v1", healthRoutes);
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/users", userRoutes);
+app.use("/api/v1", masterDataRoutes);
 app.use(notFound);
 app.use(errorHandler);
 

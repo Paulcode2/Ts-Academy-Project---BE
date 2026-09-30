@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const { TRANSFER_STATUS_VALUES } = require("../constants");
+const validateActiveReference = require("./activeReferenceValidation");
 
 const transferSchema = new mongoose.Schema(
   {
@@ -80,7 +81,7 @@ const transferSchema = new mongoose.Schema(
   },
 );
 
-transferSchema.pre("validate", function (next) {
+transferSchema.pre("validate", async function (next) {
   if (
     this.sourceWarehouse &&
     this.destinationWarehouse &&
@@ -92,7 +93,46 @@ transferSchema.pre("validate", function (next) {
     );
   }
 
-  next();
+  try {
+    const references = await Promise.all([
+      validateActiveReference(this, "product", "Product"),
+      validateActiveReference(this, "sourceWarehouse", "Warehouse"),
+      validateActiveReference(this, "sourceLocation", "Location"),
+      validateActiveReference(this, "destinationWarehouse", "Warehouse"),
+      validateActiveReference(this, "destinationLocation", "Location"),
+    ]);
+    const [
+      ,
+      sourceWarehouse,
+      sourceLocation,
+      destinationWarehouse,
+      destinationLocation,
+    ] = references;
+    if (
+      sourceLocation &&
+      sourceWarehouse &&
+      String(sourceLocation.warehouse) !== String(this.sourceWarehouse)
+    ) {
+      this.invalidate(
+        "sourceWarehouse",
+        "Source warehouse must match the source location.",
+      );
+    }
+    if (
+      destinationLocation &&
+      destinationWarehouse &&
+      String(destinationLocation.warehouse) !==
+        String(this.destinationWarehouse)
+    ) {
+      this.invalidate(
+        "destinationWarehouse",
+        "Destination warehouse must match the destination location.",
+      );
+    }
+    next();
+  } catch (error) {
+    next(error);
+  }
 });
 
 module.exports = mongoose.model("Transfer", transferSchema);
