@@ -5,6 +5,7 @@ dotenv.config();
 
 const app = require("./app");
 const { connectDB } = require("./config/db");
+const { validateAuthEnvironment } = require("./config/auth");
 
 const PORT = Number(process.env.PORT) || 5000;
 
@@ -26,6 +27,7 @@ const shutdown = async (signal) => {
 };
 
 const startServer = async () => {
+  validateAuthEnvironment();
   await connectDB();
 
   server = app.listen(PORT, () => {

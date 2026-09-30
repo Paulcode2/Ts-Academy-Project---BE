@@ -7,8 +7,9 @@
   "scripts": {
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
-    "test": "node --test",
-    "seed:dev": "node scripts/seedDevelopment.js"
+    "test": "node --test --test-concurrency=1",
+    "seed:dev": "node scripts/seedDevelopment.js",
+    "create:admin": "node scripts/createInitialAdmin.js"
   },
   "keywords": [
     "warehouse",
@@ -18,11 +19,14 @@
   ],
   "license": "MIT",
   "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.21.2",
     "express-rate-limit": "^7.4.1",
     "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.3",
     "mongoose": "^8.8.1",
     "morgan": "^1.10.0"
   },
