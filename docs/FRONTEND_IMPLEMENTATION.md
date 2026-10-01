@@ -7,13 +7,14 @@
 
 ## Backend base URL pattern
 
-The backend API will run under a versioned base path following this pattern:
+Use the local URL for development and the deployed URL for production:
 
 ```text
-http://localhost:5000/api/v1
+Development: http://localhost:5000/api/v1
+Production:  https://warehouse-management-backend-tqc9.onrender.com/api/v1
 ```
 
-Use the backend server URL plus `/api/v1` for all API calls.
+Use the backend server URL plus `/api/v1` for all API calls. Configure the frontend's `REACT_APP_API_URL` with the appropriate base URL for its environment.
 
 ## API version prefix
 
@@ -55,7 +56,7 @@ The backend will accept requests from the configured frontend origin using the `
 
 ## Environment variable for the frontend API URL
 
-The frontend should eventually use the `REACT_APP_API_URL` environment variable to point at the backend base URL.
+Configure the frontend's `REACT_APP_API_URL` environment variable with the backend base URL for the target environment. For production, use `https://warehouse-management-backend-tqc9.onrender.com/api/v1`.
 
 ## Phase 1 historical scope note (superseded)
 
@@ -820,13 +821,13 @@ The “not yet available” statements in the Phase 1 section and “outside thi
 
 ### Production base URL
 
-Configure the frontend `REACT_APP_API_URL` to the deployed API base URL, for example:
+Configure the frontend `REACT_APP_API_URL` to this deployed API base URL:
 
 ```text
-https://<backend-service>.onrender.com/api/v1
+https://warehouse-management-backend-tqc9.onrender.com/api/v1
 ```
 
-The placeholder must be replaced with the deployment's actual HTTPS origin. No deployment URL or production credentials are available in this repository.
+The API origin is `https://warehouse-management-backend-tqc9.onrender.com`. Health checks should use `https://warehouse-management-backend-tqc9.onrender.com/api/v1/health`. Do not append `/api/v1` to `REACT_APP_API_URL` a second time when constructing endpoint URLs.
 
 ### Complete endpoint index
 
@@ -909,7 +910,7 @@ Paginated responses include:
 
 - Configure backend `FRONTEND_URL` to the exact frontend HTTPS origin(s), comma-separated if there are several. Production rejects missing, non-HTTPS, or path-bearing origins and does not enable credentialed wildcard CORS.
 - Configure frontend `REACT_APP_API_URL` to the API origin plus `/api/v1`; include credentials for refresh-cookie operations.
-- `GET /api/v1/health` reports server/database status. It returns HTTP 200 only when MongoDB is connected; otherwise it returns HTTP 503, which is the deployment readiness signal. Do not treat 503 as an authenticated API response.
+- `GET https://warehouse-management-backend-tqc9.onrender.com/api/v1/health` reports server/database status. It returns HTTP 200 only when MongoDB is connected; otherwise it returns HTTP 503, which is the deployment readiness signal. Do not treat 503 as an authenticated API response.
 - Production requires MongoDB, two separate high-entropy JWT secrets, valid token lifetimes, and a configured frontend origin. Do not expose credentials or bootstrap passwords in client code or documentation.
 
 ### Compatibility changes and deployment configuration
@@ -928,11 +929,11 @@ No shared test accounts or passwords are published. Request access through the p
 - Refresh sessions are single-session-per-user: logging in again removes the previous session.
 - Access JWTs remain valid until expiration after logout or password change; deactivation blocks a user immediately.
 - Dashboard recent activity and report results are bounded; reports have no CSV export.
-- This work prepares deployment but does not claim a deployment, production database, or remote health check has been verified.
+- The Render deployment URL has been provided and documented. Its remote health response and production database connection have not been independently verified here.
 
 ## Frontend Integration Checklist
 
-- [ ] Configure `REACT_APP_API_URL` to the deployed `/api/v1` base URL.
+- [ ] Configure `REACT_APP_API_URL` as `https://warehouse-management-backend-tqc9.onrender.com/api/v1` in the production frontend environment.
 - [ ] Confirm login returns an access token and safe user profile.
 - [ ] Attach the access token as a Bearer token to protected requests.
 - [ ] Enable credentials for login, refresh, and logout cookie requests.
@@ -955,4 +956,4 @@ No shared test accounts or passwords are published. Request access through the p
 - [ ] Handle 403 as insufficient role or warehouse access; do not retry unchanged.
 - [ ] Handle 404 as a missing resource and offer navigation/reload where appropriate.
 - [ ] Handle 5xx/503 with a clear retry/support state; do not retry stock operations with a new idempotency key unless the user initiates a new operation.
-- [ ] Confirm backend readiness at `GET /api/v1/health` before enabling production traffic.
+- [ ] Confirm backend readiness at `https://warehouse-management-backend-tqc9.onrender.com/api/v1/health` before enabling production traffic.
