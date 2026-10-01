@@ -405,6 +405,15 @@ const listInventory = async (req) => {
   if (selectedWarehouse) match.warehouse = selectedWarehouse;
   if (selectedProduct) match.product = selectedProduct;
   if (selectedLocation) match.location = selectedLocation;
+  if (req.inventoryUpdatedAtRange) {
+    match.updatedAt = {};
+    if (req.inventoryUpdatedAtRange.startDate) {
+      match.updatedAt.$gte = req.inventoryUpdatedAtRange.startDate;
+    }
+    if (req.inventoryUpdatedAtRange.endDate) {
+      match.updatedAt.$lte = req.inventoryUpdatedAtRange.endDate;
+    }
+  }
   const stockStatus = req.inventoryStockStatus || req.query.stockStatus;
   if (
     stockStatus &&

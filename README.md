@@ -72,6 +72,16 @@ Example response:
 }
 ```
 
+## API reference
+
+The OpenAPI 3.0.3 specification for all implemented Phase 1–7 endpoints is in `docs/openapi.yaml` and is served at:
+
+```http
+GET /api/v1/openapi.yaml
+```
+
+Dashboard and reports are available under `/api/v1/dashboard` and `/api/v1/reports`. All reports are paginated with a maximum page size of 50. Report date filters accept ISO-8601 dates or timestamps; date-only `endDate` values include the entire UTC day.
+
 ## Folder structure
 
 ```text

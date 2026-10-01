@@ -32,6 +32,7 @@ const inventorySchema = new mongoose.Schema(
 
 inventorySchema.index({ product: 1, location: 1 }, { unique: true });
 inventorySchema.index({ warehouse: 1, product: 1 });
+inventorySchema.index({ warehouse: 1, updatedAt: -1 });
 
 inventorySchema.pre("validate", async function (next) {
   try {

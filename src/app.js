@@ -11,6 +11,8 @@ const userRoutes = require("./routes/userRoutes");
 const masterDataRoutes = require("./routes/masterDataRoutes");
 const inventoryRoutes = require("./routes/inventoryRoutes");
 const transferRoutes = require("./routes/transferRoutes");
+const reportingRoutes = require("./routes/reportingRoutes");
+const documentationRoutes = require("./routes/documentationRoutes");
 const notFound = require("./middleware/notFound");
 const errorHandler = require("./middleware/errorHandler");
 
@@ -68,9 +70,11 @@ app.use(cookieParser());
 app.use("/api/v1", healthRoutes);
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/users", userRoutes);
+app.use("/api/v1", documentationRoutes);
 app.use("/api/v1", masterDataRoutes);
 app.use("/api/v1", inventoryRoutes);
 app.use("/api/v1/transfers", transferRoutes);
+app.use("/api/v1", reportingRoutes);
 app.use(notFound);
 app.use(errorHandler);
 
