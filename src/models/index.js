@@ -7,6 +7,7 @@ const Inventory = require("./Inventory");
 const StockMovement = require("./StockMovement");
 const Transfer = require("./Transfer");
 const RefreshToken = require("./RefreshToken");
+const InventoryOperation = require("./InventoryOperation");
 
 module.exports = {
   User,
@@ -18,4 +19,5 @@ module.exports = {
   StockMovement,
   Transfer,
   RefreshToken,
+  InventoryOperation,
 };

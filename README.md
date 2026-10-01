@@ -9,8 +9,11 @@ This service provides a REST API foundation for future warehouse-management feat
 ## Requirements
 
 - Node.js 18 or newer
-- MongoDB instance or compatible MongoDB URI
+- MongoDB replica set or sharded cluster (required for transactional stock operations)
+- MongoDB URI
 - npm
+
+For local stock-operation development, configure MongoDB as a single-node replica set and include its replica-set name in `MONGODB_URI`. A standalone `mongod` can serve reads but cannot perform stock-changing transactions.
 
 ## Installation
 
@@ -96,4 +99,4 @@ backend/
 
 ## Notes
 
-This phase focuses on backend architecture, application configuration, health-check routing, error handling, and database connectivity setup. Authentication, products, inventory, and transfer features are intentionally not included yet.
+The API currently includes authentication and user administration, master-data endpoints, inventory queries, stock-in/out/adjustment operations, and stock-movement history. Stock-changing requests use MongoDB transactions and require a replica set or sharded cluster. Standalone MongoDB instances can serve read and master-data requests, but stock-changing operations return HTTP 503 rather than falling back to non-atomic writes. Transfer workflows are not implemented yet.
