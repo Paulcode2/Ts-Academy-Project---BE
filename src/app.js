@@ -9,6 +9,7 @@ const healthRoutes = require("./routes/healthRoutes");
 const authRoutes = require("./routes/authRoutes");
 const userRoutes = require("./routes/userRoutes");
 const masterDataRoutes = require("./routes/masterDataRoutes");
+const inventoryRoutes = require("./routes/inventoryRoutes");
 const notFound = require("./middleware/notFound");
 const errorHandler = require("./middleware/errorHandler");
 
@@ -38,7 +39,7 @@ app.use(
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization", "Idempotency-Key"],
   }),
 );
 app.use(
@@ -67,6 +68,7 @@ app.use("/api/v1", healthRoutes);
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/users", userRoutes);
 app.use("/api/v1", masterDataRoutes);
+app.use("/api/v1", inventoryRoutes);
 app.use(notFound);
 app.use(errorHandler);
 
