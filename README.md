@@ -109,7 +109,7 @@ This repository is prepared for deployment but no deployment is claimed as compl
 
 ## Frontend integration
 
-See [`../docs/FRONTEND_IMPLEMENTATION.md`](../docs/FRONTEND_IMPLEMENTATION.md) for the full integration contract and checklist. The OpenAPI reference is [`docs/openapi.yaml`](docs/openapi.yaml).
+See [`/docs/FRONTEND_IMPLEMENTATION.md`](/docs/FRONTEND_IMPLEMENTATION.md) for the full integration contract and checklist. The OpenAPI reference is [`docs/openapi.yaml`](docs/openapi.yaml).
 
 ## Known limitations
 
