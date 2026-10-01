@@ -83,13 +83,13 @@ const transferSchema = new mongoose.Schema(
 
 transferSchema.pre("validate", async function (next) {
   if (
-    this.sourceWarehouse &&
-    this.destinationWarehouse &&
-    String(this.sourceWarehouse) === String(this.destinationWarehouse)
+    this.sourceLocation &&
+    this.destinationLocation &&
+    String(this.sourceLocation) === String(this.destinationLocation)
   ) {
     this.invalidate(
-      "destinationWarehouse",
-      "Destination warehouse must differ from source warehouse.",
+      "destinationLocation",
+      "Destination location must differ from source location.",
     );
   }
 
