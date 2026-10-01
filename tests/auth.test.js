@@ -1,3 +1,5 @@
+require("./helpers/env");
+
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const request = require("supertest");
@@ -7,9 +9,7 @@ const jwt = require("jsonwebtoken");
 const app = require("../src/app");
 const { User, Warehouse, RefreshToken } = require("../src/models");
 
-const DB_URI =
-  process.env.MONGODB_URI ||
-  "mongodb://127.0.0.1:27017/warehouse_management_test";
+const { testDatabaseUri: DB_URI } = require("./helpers/database");
 
 const makeUser = async (overrides = {}) => {
   const baseUser = {
@@ -110,6 +110,15 @@ test("expired tokens are rejected", async () => {
   assert.match(response.body.message, /expired|invalid/i);
 });
 
+test("invalid access tokens are rejected", async () => {
+  const response = await request(app)
+    .get("/api/v1/auth/me")
+    .set("Authorization", "Bearer not-a-valid-token")
+    .expect(401);
+
+  assert.match(response.body.message, /invalid access token/i);
+});
+
 test("refresh flow rotates refresh tokens and logout invalidates sessions", async () => {
   const user = await makeUser({ email: "refresh@example.com" });
 
@@ -133,16 +142,46 @@ test("refresh flow rotates refresh tokens and logout invalidates sessions", asyn
   assert.equal(refreshResponse.body.success, true);
   assert.ok(refreshResponse.body.data.accessToken);
 
+  const rotatedCookie = refreshResponse.headers["set-cookie"][0]
+    .split(";")[0]
+    .split("=")[1];
+  await request(app)
+    .post("/api/v1/auth/refresh")
+    .set("Cookie", [`refreshToken=${refreshCookie}`])
+    .expect(401);
+
   const logoutResponse = await request(app)
     .post("/api/v1/auth/logout")
-    .set("Cookie", [`refreshToken=${refreshCookie}`])
+    .set("Cookie", [`refreshToken=${rotatedCookie}`])
     .expect(200);
 
   assert.equal(logoutResponse.body.success, true);
   assert.equal(logoutResponse.body.message, "Logged out successfully.");
 
-  const revokedCheck = await RefreshToken.findOne({ user: user._id });
-  assert.equal(revokedCheck, null);
+  const remainingSessions = await RefreshToken.countDocuments({ user: user._id });
+  assert.equal(remainingSessions, 0);
+});
+
+test("concurrent refresh attempts can consume a refresh token only once", async () => {
+  await makeUser({ email: "concurrent-refresh@example.com" });
+  const login = await request(app)
+    .post("/api/v1/auth/login")
+    .send({
+      email: "concurrent-refresh@example.com",
+      password: "StrongPassword123!",
+    })
+    .expect(200);
+  const cookie = login.headers["set-cookie"][0].split(";")[0];
+
+  const responses = await Promise.all([
+    request(app).post("/api/v1/auth/refresh").set("Cookie", [cookie]),
+    request(app).post("/api/v1/auth/refresh").set("Cookie", [cookie]),
+  ]);
+
+  assert.deepEqual(
+    responses.map((response) => response.status).sort(),
+    [200, 401],
+  );
 });
 
 test("password change works and invalidates existing sessions", async () => {
@@ -179,7 +218,10 @@ test("password change works and invalidates existing sessions", async () => {
 });
 
 test("deactivated users cannot log in or access protected routes", async () => {
-  await makeUser({ email: "deactivated@example.com", isActive: false });
+  const user = await makeUser({
+    email: "deactivated@example.com",
+    isActive: false,
+  });
 
   const loginResponse = await request(app)
     .post("/api/v1/auth/login")
@@ -191,6 +233,70 @@ test("deactivated users cannot log in or access protected routes", async () => {
 
   assert.equal(loginResponse.body.success, false);
   assert.equal(loginResponse.body.message, "Invalid email or password.");
+
+  const accessToken = jwt.sign(
+    { sub: user._id.toString(), role: user.role },
+    process.env.JWT_ACCESS_SECRET || "dev_access_secret_change_me_1234567890",
+    { expiresIn: "15m" },
+  );
+  await request(app)
+    .get("/api/v1/auth/me")
+    .set("Authorization", `Bearer ${accessToken}`)
+    .expect(401);
+});
+
+test("deactivated users cannot refresh an existing session", async () => {
+  const user = await makeUser({ email: "inactive-refresh@example.com" });
+  const login = await request(app)
+    .post("/api/v1/auth/login")
+    .send({
+      email: "inactive-refresh@example.com",
+      password: "StrongPassword123!",
+    })
+    .expect(200);
+  const cookie = login.headers["set-cookie"][0].split(";")[0];
+  await User.updateOne({ _id: user._id }, { isActive: false });
+
+  await request(app)
+    .post("/api/v1/auth/refresh")
+    .set("Cookie", [cookie])
+    .expect(401);
+});
+
+test("administrator deactivation immediately revokes a user's refresh session", async () => {
+  const admin = await makeUser({
+    email: "deactivation-admin@example.com",
+    role: "ADMIN",
+  });
+  const staff = await makeUser({ email: "deactivation-staff@example.com" });
+  const adminToken = jwt.sign(
+    { sub: admin._id.toString(), role: admin.role },
+    process.env.JWT_ACCESS_SECRET,
+    { expiresIn: "15m" },
+  );
+  const staffLogin = await request(app)
+    .post("/api/v1/auth/login")
+    .send({
+      email: staff.email,
+      password: "StrongPassword123!",
+    })
+    .expect(200);
+  const staffAccessToken = staffLogin.body.data.accessToken;
+  const staffRefreshCookie = staffLogin.headers["set-cookie"][0].split(";")[0];
+
+  await request(app)
+    .patch(`/api/v1/users/${staff._id}/deactivate`)
+    .set("Authorization", `Bearer ${adminToken}`)
+    .expect(200);
+  assert.equal(await RefreshToken.countDocuments({ user: staff._id }), 0);
+  await request(app)
+    .get("/api/v1/auth/me")
+    .set("Authorization", `Bearer ${staffAccessToken}`)
+    .expect(401);
+  await request(app)
+    .post("/api/v1/auth/refresh")
+    .set("Cookie", [staffRefreshCookie])
+    .expect(401);
 });
 
 test("staff cannot use admin user-management endpoints", async () => {
@@ -211,4 +317,34 @@ test("staff cannot use admin user-management endpoints", async () => {
   assert.equal(response.body.success, false);
   assert.equal(response.body.message, "Access denied.");
   assert.equal(response.body.data, null);
+});
+
+test("administrator user search treats input as literal text and bounds its length", async () => {
+  const admin = await makeUser({
+    firstName: "Ops [Admin]",
+    role: "ADMIN",
+    email: "ops-admin@example.com",
+  });
+  await makeUser({
+    firstName: "Ops Admin",
+    role: "STAFF",
+    email: "ops-staff@example.com",
+  });
+  const accessToken = jwt.sign(
+    { sub: admin._id.toString(), role: admin.role },
+    process.env.JWT_ACCESS_SECRET || "dev_access_secret_change_me_1234567890",
+    { expiresIn: "15m" },
+  );
+
+  const literalSearch = await request(app)
+    .get("/api/v1/users?search=Ops%20%5BAdmin%5D")
+    .set("Authorization", `Bearer ${accessToken}`)
+    .expect(200);
+  assert.equal(literalSearch.body.pagination.totalItems, 1);
+  assert.equal(literalSearch.body.data[0].firstName, "Ops [Admin]");
+
+  await request(app)
+    .get(`/api/v1/users?search=${"a".repeat(101)}`)
+    .set("Authorization", `Bearer ${accessToken}`)
+    .expect(400);
 });

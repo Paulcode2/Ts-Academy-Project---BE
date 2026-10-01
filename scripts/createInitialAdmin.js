@@ -1,6 +1,9 @@
+require("dotenv").config();
+
 const { User } = require("../src/models");
 const { isStrongPassword } = require("../src/config/auth");
 const mongoose = require("mongoose");
+const { connectDB } = require("../src/config/db");
 
 const requiredEnvKeys = [
   "ADMIN_FIRST_NAME",
@@ -36,34 +39,31 @@ const createInitialAdmin = async () => {
     );
   }
 
-  await mongoose.connect(mongoUri);
+  await connectDB();
 
-  const existingAdmin = await User.findOne({
-    email: process.env.ADMIN_EMAIL.trim().toLowerCase(),
-    role: "ADMIN",
-  });
+  try {
+    const existingAdmin = await User.findOne({ role: "ADMIN" }).select("_id");
+    if (existingAdmin) {
+      throw new Error(
+        "An administrator already exists. Use the authenticated user-management API to add another.",
+      );
+    }
 
-  if (existingAdmin) {
+    await User.create({
+      firstName: process.env.ADMIN_FIRST_NAME,
+      lastName: process.env.ADMIN_LAST_NAME,
+      email: process.env.ADMIN_EMAIL.trim().toLowerCase(),
+      password: process.env.ADMIN_PASSWORD,
+      role: "ADMIN",
+      isActive: true,
+    });
+
     console.info(
-      "An administrator account already exists for this email address.",
+      `Initial admin created: ${process.env.ADMIN_EMAIL.trim().toLowerCase()}`,
     );
+  } finally {
     await mongoose.disconnect();
-    return;
   }
-
-  await User.create({
-    firstName: process.env.ADMIN_FIRST_NAME,
-    lastName: process.env.ADMIN_LAST_NAME,
-    email: process.env.ADMIN_EMAIL.trim().toLowerCase(),
-    password: process.env.ADMIN_PASSWORD,
-    role: "ADMIN",
-    isActive: true,
-  });
-
-  console.info(
-    `Initial admin created: ${process.env.ADMIN_EMAIL.trim().toLowerCase()}`,
-  );
-  await mongoose.disconnect();
 };
 
 createInitialAdmin().catch((error) => {

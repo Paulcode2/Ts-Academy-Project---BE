@@ -1,3 +1,5 @@
+require("./helpers/env");
+
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const request = require("supertest");
@@ -15,9 +17,7 @@ const {
   Warehouse,
 } = require("../src/models");
 
-const DB_URI =
-  process.env.MONGODB_URI ||
-  "mongodb://127.0.0.1:27017/warehouse_management_test";
+const { testDatabaseUri: DB_URI } = require("./helpers/database");
 const ACCESS_SECRET =
   process.env.JWT_ACCESS_SECRET || "dev_access_secret_change_me_1234567890";
 let supportsTransactions = false;

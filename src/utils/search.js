@@ -6,6 +6,10 @@ const normalizeSearchString = (value = "") => {
   return String(value).trim().replace(/\s+/g, " ").toLowerCase();
 };
 
+const escapeRegex = (value = "") =>
+  String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 module.exports = {
   normalizeSearchString,
+  escapeRegex,
 };

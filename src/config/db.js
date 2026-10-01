@@ -1,24 +1,5 @@
 const mongoose = require("mongoose");
 
-const redactMongoUri = (mongoUri) => {
-  if (!mongoUri) {
-    return "not configured";
-  }
-
-  try {
-    const parsedUri = new URL(mongoUri);
-
-    if (parsedUri.username || parsedUri.password) {
-      parsedUri.username = "***";
-      parsedUri.password = "***";
-    }
-
-    return parsedUri.toString();
-  } catch (error) {
-    return mongoUri.replace(/\/\/([^@]+)@/, "//***@");
-  }
-};
-
 const getDatabaseStatus = () => {
   const states = {
     0: "disconnected",
@@ -34,8 +15,7 @@ const connectDB = async () => {
   const mongoUri = process.env.MONGODB_URI;
 
   if (!mongoUri) {
-    console.warn("MONGODB_URI is not defined. Database connection skipped.");
-    return false;
+    throw new Error("MONGODB_URI is required before starting the server.");
   }
 
   try {
@@ -46,19 +26,33 @@ const connectDB = async () => {
     console.info("MongoDB connected successfully.");
     return true;
   } catch (error) {
+    const safeMessage = String(error.message || "Unknown database error")
+      .replace(mongoUri, "[redacted MongoDB URI]")
+      .replace(/mongodb(?:\+srv)?:\/\/[^@\s]+@/gi, "mongodb://[redacted]@");
     console.error(
       "MongoDB connection failed. Check MONGODB_URI and ensure the database is reachable.",
-      {
-        uri: redactMongoUri(mongoUri),
-        error: error.message,
-      },
+      process.env.NODE_ENV === "production" ? "" : safeMessage,
     );
-    return false;
+    throw new Error("MongoDB connection failed; verify the database configuration and availability.");
   }
 };
 
 mongoose.connection.on("error", (error) => {
-  console.error("MongoDB runtime error:", error.message);
+  let safeMessage = String(error.message || "Unknown database error");
+  if (process.env.MONGODB_URI) {
+    safeMessage = safeMessage.replace(
+      process.env.MONGODB_URI,
+      "[redacted MongoDB URI]",
+    );
+  }
+  safeMessage = safeMessage.replace(
+    /mongodb(?:\+srv)?:\/\/[^@\s]+@/gi,
+    "mongodb://[redacted]@",
+  );
+  console.error(
+    "MongoDB runtime error:",
+    process.env.NODE_ENV === "production" ? "Database connection error." : safeMessage,
+  );
 });
 
 mongoose.connection.on("disconnected", () => {

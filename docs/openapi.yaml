@@ -1,0 +1,1086 @@
+openapi: 3.0.3
+info:
+  title: Warehouse Management API
+  version: 1.0.0
+  description: |
+    Complete REST API contract for Warehouse Management backend Phases 1–7.
+    All dates are ISO-8601; date-only report endDate values include that entire
+    UTC calendar day. Private endpoints require a Bearer access token.
+servers:
+  - url: /api/v1
+    description: Version 1 API
+tags:
+  - name: Health
+  - name: Authentication
+  - name: Users
+  - name: Warehouses
+  - name: Locations
+  - name: Categories
+  - name: Products
+  - name: Inventory
+  - name: Stock movements
+  - name: Transfers
+  - name: Dashboard
+  - name: Reports
+  - name: Documentation
+security:
+  - bearerAuth: []
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Health check
+      description: Public operational status; does not disclose database credentials.
+      security: []
+      responses:
+        "200": { description: Health status, environment, database status, and timestamp }
+        "503": { description: The API process is running but its database is unavailable; response includes structured health status }
+        "500": { $ref: "#/components/responses/ServerError" }
+  /openapi.yaml:
+    get:
+      tags: [Documentation]
+      summary: Download this OpenAPI document
+      security: []
+      responses:
+        "200": { description: OpenAPI YAML document, content: { application/yaml: { schema: { type: string } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /auth/login:
+    post:
+      tags: [Authentication]
+      summary: Authenticate an internal user
+      description: Generic invalid-credential errors; sets the refresh token as an HTTP-only cookie.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties: { email: { type: string, format: email }, password: { type: string, format: password } }
+      responses:
+        "200": { description: Access token and safe user data }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { description: Login rate limit exceeded }
+  /auth/refresh:
+    post:
+      tags: [Authentication]
+      summary: Rotate refresh token
+      description: Reads and rotates the HTTP-only refreshToken cookie; no request body.
+      security: []
+      responses:
+        "200": { description: New access token and rotated refresh cookie }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /auth/logout:
+    post:
+      tags: [Authentication]
+      summary: Revoke refresh session
+      security: []
+      responses:
+        "200": { description: Session revoked and refresh cookie cleared }
+  /auth/me:
+    get:
+      tags: [Authentication]
+      summary: Get current authenticated user
+      responses:
+        "200": { description: Current user without password fields }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /auth/change-password:
+    patch:
+      tags: [Authentication]
+      summary: Change current password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties: { currentPassword: { type: string, format: password }, newPassword: { type: string, format: password } }
+      responses:
+        "200": { description: Password changed; existing refresh sessions invalidated }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /users:
+    get:
+      tags: [Users]
+      summary: List users
+      description: ADMIN only. Supports search/status and pagination.
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - { name: search, in: query, schema: { type: string }, description: Search names/email }
+        - { name: status, in: query, schema: { type: string, enum: [active, inactive, all] } }
+      responses:
+        "200": { description: Paginated safe user records }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Users]
+      summary: Create an internal user
+      description: ADMIN only; public self-registration is not available.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [firstName, lastName, email, password, role]
+              properties:
+                firstName: { type: string }
+                lastName: { type: string }
+                email: { type: string, format: email }
+                password: { type: string, format: password }
+                role: { $ref: "#/components/schemas/Role" }
+                assignedWarehouses: { type: array, items: { $ref: "#/components/schemas/Id" } }
+      responses:
+        "201": { description: Created safe user record }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /users/{id}:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [Users]
+      summary: Get a user
+      description: ADMIN only.
+      responses:
+        "200": { description: Safe user record }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Users]
+      summary: Update user profile
+      description: ADMIN only.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { firstName: { type: string }, lastName: { type: string }, email: { type: string, format: email }, isActive: { type: boolean } }
+      responses:
+        "200": { description: Updated safe user record }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /users/{id}/role:
+    patch:
+      tags: [Users]
+      summary: Change user role
+      description: ADMIN only.
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [role], properties: { role: { $ref: "#/components/schemas/Role" } } }
+      responses:
+        "200": { description: Updated safe user }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /users/{id}/warehouses:
+    patch:
+      tags: [Users]
+      summary: Assign user warehouses
+      description: ADMIN only.
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [assignedWarehouses], properties: { assignedWarehouses: { type: array, items: { $ref: "#/components/schemas/Id" } } } }
+      responses:
+        "200": { description: Updated safe user }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /users/{id}/activate:
+    patch:
+      tags: [Users]
+      summary: Activate user
+      description: ADMIN only.
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { description: Safe user with active status }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /users/{id}/deactivate:
+    patch:
+      tags: [Users]
+      summary: Deactivate user
+      description: ADMIN only; blocks previously issued access tokens.
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { description: Safe user with inactive status }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /users/{id}/reset-password:
+    patch:
+      tags: [Users]
+      summary: Reset a user's password
+      description: ADMIN only.
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [newPassword], properties: { newPassword: { type: string, format: password } } }
+      responses:
+        "200": { description: Password reset; safe user response }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /warehouses:
+    get:
+      tags: [Warehouses]
+      summary: List warehouses visible to the current user
+      parameters:
+        - { name: search, in: query, schema: { type: string }, description: Search name/code }
+        - { name: status, in: query, schema: { type: string, enum: [active, inactive, all] } }
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - { name: sortBy, in: query, schema: { type: string } }
+        - { name: sortOrder, in: query, schema: { type: string, enum: [asc, desc] } }
+      responses:
+        "200": { description: Paginated warehouses, scoped by assignment/manager }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [Warehouses]
+      summary: Create warehouse
+      description: ADMIN only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [name, code, address], properties: { name: { type: string }, code: { type: string }, address: { type: object }, manager: { $ref: "#/components/schemas/Id" }, description: { type: string } } }
+      responses:
+        "201": { description: Created warehouse }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /warehouses/{warehouseId}:
+    parameters: [{ $ref: "#/components/parameters/WarehouseId" }]
+    get:
+      tags: [Warehouses]
+      summary: Get warehouse
+      responses:
+        "200": { description: Warehouse detail }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Warehouses]
+      summary: Update warehouse
+      description: ADMIN only.
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { name: { type: string }, code: { type: string }, address: { type: object }, manager: { $ref: "#/components/schemas/Id" }, description: { type: string } } }
+      responses:
+        "200": { description: Updated warehouse }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /warehouses/{warehouseId}/status:
+    patch:
+      tags: [Warehouses]
+      summary: Activate/deactivate warehouse
+      description: ADMIN only; status changes do not delete history.
+      parameters: [{ $ref: "#/components/parameters/WarehouseId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [isActive], properties: { isActive: { type: boolean } } }
+      responses:
+        "200": { description: Updated warehouse status }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /locations:
+    get:
+      tags: [Locations]
+      summary: List locations visible to the current user
+      parameters:
+        - { name: warehouseId, in: query, schema: { $ref: "#/components/schemas/Id" } }
+        - { name: type, in: query, schema: { type: string } }
+        - { name: search, in: query, schema: { type: string } }
+        - { name: status, in: query, schema: { type: string, enum: [active, inactive, all] } }
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200": { description: Paginated accessible locations }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [Locations]
+      summary: Create location
+      description: ADMIN or MANAGER with warehouse access.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [name, code, warehouse], properties: { name: { type: string }, code: { type: string }, warehouse: { $ref: "#/components/schemas/Id" }, type: { type: string }, description: { type: string } } }
+      responses:
+        "201": { description: Created location }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /locations/{locationId}:
+    parameters: [{ $ref: "#/components/parameters/LocationId" }]
+    get:
+      tags: [Locations]
+      summary: Get location
+      responses:
+        "200": { description: Location detail }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Locations]
+      summary: Update location
+      description: ADMIN or MANAGER with warehouse access.
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { name: { type: string }, code: { type: string }, warehouse: { $ref: "#/components/schemas/Id" }, type: { type: string }, description: { type: string } } }
+      responses:
+        "200": { description: Updated location }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /locations/{locationId}/status:
+    patch:
+      tags: [Locations]
+      summary: Activate/deactivate location
+      description: ADMIN or MANAGER with warehouse access.
+      parameters: [{ $ref: "#/components/parameters/LocationId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [isActive], properties: { isActive: { type: boolean } } }
+      responses:
+        "200": { description: Updated location status }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /categories:
+    get:
+      tags: [Categories]
+      summary: List categories
+      parameters:
+        - { name: search, in: query, schema: { type: string } }
+        - { name: status, in: query, schema: { type: string, enum: [active, inactive, all] } }
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200": { description: Paginated categories }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [Categories]
+      summary: Create category
+      description: ADMIN or MANAGER.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [name], properties: { name: { type: string }, description: { type: string } } }
+      responses:
+        "201": { description: Created category }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /categories/{categoryId}:
+    parameters: [{ $ref: "#/components/parameters/CategoryId" }]
+    get:
+      tags: [Categories]
+      summary: Get category
+      responses:
+        "200": { description: Category detail }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Categories]
+      summary: Update category
+      description: ADMIN or MANAGER.
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { name: { type: string }, description: { type: string } } }
+      responses:
+        "200": { description: Updated category }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /categories/{categoryId}/status:
+    patch:
+      tags: [Categories]
+      summary: Activate/deactivate category
+      description: ADMIN or MANAGER.
+      parameters: [{ $ref: "#/components/parameters/CategoryId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [isActive], properties: { isActive: { type: boolean } } }
+      responses:
+        "200": { description: Updated category status }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /products:
+    get:
+      tags: [Products]
+      summary: List products
+      parameters:
+        - { name: search, in: query, schema: { type: string }, description: Search name/SKU }
+        - { name: category, in: query, schema: { $ref: "#/components/schemas/Id" } }
+        - { name: unit, in: query, schema: { type: string } }
+        - { name: status, in: query, schema: { type: string, enum: [active, inactive, all] } }
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200": { description: Paginated products }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [Products]
+      summary: Create product
+      description: ADMIN or MANAGER.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [name, sku, category, unit], properties: { name: { type: string }, sku: { type: string }, category: { $ref: "#/components/schemas/Id" }, unit: { type: string }, description: { type: string }, minimumStockLevel: { type: number, minimum: 0 } } }
+      responses:
+        "201": { description: Created product }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /products/{productId}:
+    parameters: [{ $ref: "#/components/parameters/ProductId" }]
+    get:
+      tags: [Products]
+      summary: Get product
+      responses:
+        "200": { description: Product detail }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Products]
+      summary: Update product
+      description: ADMIN or MANAGER.
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { name: { type: string }, sku: { type: string }, category: { $ref: "#/components/schemas/Id" }, unit: { type: string }, description: { type: string }, minimumStockLevel: { type: number, minimum: 0 } } }
+      responses:
+        "200": { description: Updated product }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /products/{productId}/status:
+    patch:
+      tags: [Products]
+      summary: Activate/deactivate product
+      description: ADMIN or MANAGER.
+      parameters: [{ $ref: "#/components/parameters/ProductId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [isActive], properties: { isActive: { type: boolean } } }
+      responses:
+        "200": { description: Updated product status }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /inventory:
+    get:
+      tags: [Inventory]
+      summary: List inventory with display information
+      parameters:
+        - { name: search, in: query, schema: { type: string } }
+        - { name: product, in: query, schema: { $ref: "#/components/schemas/Id" } }
+        - { name: warehouse, in: query, schema: { $ref: "#/components/schemas/Id" } }
+        - { name: location, in: query, schema: { $ref: "#/components/schemas/Id" } }
+        - { name: category, in: query, schema: { $ref: "#/components/schemas/Id" } }
+        - { name: stockStatus, in: query, schema: { type: string, enum: [IN_STOCK, LOW_STOCK, OUT_OF_STOCK] } }
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - { name: sort, in: query, schema: { type: string } }
+      responses:
+        "200": { description: Paginated, warehouse-scoped inventory }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /inventory/low-stock:
+    get:
+      tags: [Inventory]
+      summary: List low-stock inventory records
+      description: Same filters as GET /inventory; status is fixed to LOW_STOCK.
+      responses:
+        "200": { description: Paginated low-stock records }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /inventory/out-of-stock:
+    get:
+      tags: [Inventory]
+      summary: List out-of-stock inventory records
+      description: Same filters as GET /inventory; status is fixed to OUT_OF_STOCK.
+      responses:
+        "200": { description: Paginated out-of-stock records }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /inventory/{inventoryId}:
+    get:
+      tags: [Inventory]
+      summary: Get one inventory record
+      parameters: [{ $ref: "#/components/parameters/InventoryId" }]
+      responses:
+        "200": { description: Inventory detail }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /stock-movements/stock-in:
+    post:
+      tags: [Stock movements]
+      summary: Receive stock
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StockOperation" }
+      responses:
+        "201": { description: Updated inventory and STOCK_IN movement }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/TransactionUnavailable" }
+  /stock-movements/stock-out:
+    post:
+      tags: [Stock movements]
+      summary: Issue stock
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StockOperation" }
+      responses:
+        "201": { description: Updated inventory and STOCK_OUT movement }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/TransactionUnavailable" }
+  /stock-movements/adjust:
+    post:
+      tags: [Stock movements]
+      summary: Adjust stock to a counted quantity
+      description: ADMIN or MANAGER only; backend derives adjustment direction.
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { allOf: [{ $ref: "#/components/schemas/StockOperation" }], properties: { newQuantity: { type: number, minimum: 0 } } }
+      responses:
+        "201": { description: Updated inventory and adjustment movement }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/TransactionUnavailable" }
+  /stock-movements:
+    get:
+      tags: [Stock movements]
+      summary: List immutable stock movements
+      parameters:
+        - { name: product, in: query, schema: { $ref: "#/components/schemas/Id" } }
+        - { name: warehouse, in: query, schema: { $ref: "#/components/schemas/Id" } }
+        - { name: location, in: query, schema: { $ref: "#/components/schemas/Id" } }
+        - { name: type, in: query, schema: { type: string } }
+        - { name: user, in: query, schema: { $ref: "#/components/schemas/Id" } }
+        - { name: reference, in: query, schema: { type: string } }
+        - { name: startDate, in: query, schema: { type: string, format: date-time } }
+        - { name: endDate, in: query, schema: { type: string, format: date-time } }
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - { name: sort, in: query, schema: { type: string } }
+      responses:
+        "200": { description: Paginated warehouse-scoped movement history }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /stock-movements/{movementId}:
+    get:
+      tags: [Stock movements]
+      summary: Get stock movement detail
+      parameters: [{ $ref: "#/components/parameters/MovementId" }]
+      responses:
+        "200": { description: Movement with previous/new quantity and actor }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /transfers:
+    get:
+      tags: [Transfers]
+      summary: List transfers visible to the current user
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [PENDING, APPROVED, COMPLETED, REJECTED, CANCELLED] } }
+        - { name: product, in: query, schema: { $ref: "#/components/schemas/Id" } }
+        - { name: warehouse, in: query, schema: { $ref: "#/components/schemas/Id" } }
+        - { name: sourceWarehouse, in: query, schema: { $ref: "#/components/schemas/Id" } }
+        - { name: destinationWarehouse, in: query, schema: { $ref: "#/components/schemas/Id" } }
+        - { name: initiatedBy, in: query, schema: { $ref: "#/components/schemas/Id" } }
+        - { name: reference, in: query, schema: { type: string } }
+        - { name: startDate, in: query, schema: { type: string, format: date-time } }
+        - { name: endDate, in: query, schema: { type: string, format: date-time } }
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - { name: sort, in: query, schema: { type: string } }
+      responses:
+        "200": { description: Paginated visible transfers }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [Transfers]
+      summary: Request stock transfer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [productId, quantity, sourceWarehouseId, sourceLocationId, destinationWarehouseId, destinationLocationId]
+              properties:
+                productId: { $ref: "#/components/schemas/Id" }
+                quantity: { type: number, exclusiveMinimum: 0 }
+                sourceWarehouseId: { $ref: "#/components/schemas/Id" }
+                sourceLocationId: { $ref: "#/components/schemas/Id" }
+                destinationWarehouseId: { $ref: "#/components/schemas/Id" }
+                destinationLocationId: { $ref: "#/components/schemas/Id" }
+                reference: { type: string }
+                notes: { type: string }
+      responses:
+        "201": { description: PENDING transfer; stock is unchanged }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /transfers/{transferId}:
+    parameters: [{ $ref: "#/components/parameters/TransferId" }]
+    get:
+      tags: [Transfers]
+      summary: Get transfer detail
+      responses:
+        "200": { description: Transfer with audit fields and populated endpoints }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /transfers/{transferId}/approve:
+    patch:
+      tags: [Transfers]
+      summary: Approve pending transfer
+      description: ADMIN or MANAGER with access to an endpoint warehouse; inventory is unchanged.
+      parameters: [{ $ref: "#/components/parameters/TransferId" }]
+      responses:
+        "200": { description: APPROVED transfer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /transfers/{transferId}/reject:
+    patch:
+      tags: [Transfers]
+      summary: Reject pending transfer
+      description: ADMIN or MANAGER with endpoint warehouse access; inventory is unchanged.
+      parameters: [{ $ref: "#/components/parameters/TransferId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [rejectionReason], properties: { rejectionReason: { type: string, maxLength: 500 } } }
+      responses:
+        "200": { description: REJECTED transfer }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /transfers/{transferId}/cancel:
+    patch:
+      tags: [Transfers]
+      summary: Cancel pending or approved transfer
+      description: Initiator or authorized ADMIN/MANAGER; inventory is unchanged.
+      parameters: [{ $ref: "#/components/parameters/TransferId" }]
+      responses:
+        "200": { description: CANCELLED transfer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /transfers/{transferId}/complete:
+    patch:
+      tags: [Transfers]
+      summary: Complete approved transfer
+      description: ADMIN or authorized MANAGER; atomically adjusts stock, creates two movements, and marks transfer complete.
+      parameters: [{ $ref: "#/components/parameters/TransferId" }]
+      responses:
+        "200": { description: Completed transfer and source/destination stock totals }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/TransactionUnavailable" }
+  /dashboard/summary:
+    get:
+      tags: [Dashboard]
+      summary: Get role-scoped dashboard summary
+      description: ADMIN receives system-wide data; MANAGER is scoped to managed/assigned warehouses; STAFF receives limited scoped totals and own recent activity.
+      responses:
+        "200": { description: Dashboard totals, recent activity, warehouse totals, movement totals }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500": { $ref: "#/components/responses/ServerError" }
+  /reports/inventory:
+    get:
+      tags: [Reports]
+      summary: Inventory report
+      description: Authenticated active users; ADMIN sees all warehouses, while MANAGER and STAFF are limited to permitted warehouses.
+      parameters:
+        - $ref: "#/components/parameters/WarehouseFilter"
+        - $ref: "#/components/parameters/LocationFilter"
+        - $ref: "#/components/parameters/ProductFilter"
+        - $ref: "#/components/parameters/CategoryFilter"
+        - $ref: "#/components/parameters/StockStatusFilter"
+        - $ref: "#/components/parameters/SearchFilter"
+        - $ref: "#/components/parameters/StartDate"
+        - $ref: "#/components/parameters/EndDate"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/InventorySort"
+      responses:
+        "200": { description: Paginated inventory report }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /reports/warehouse-inventory:
+    get:
+      tags: [Reports]
+      summary: Inventory totals grouped by warehouse
+      description: Authenticated active users; warehouse results are limited to permitted warehouses.
+      parameters:
+        - $ref: "#/components/parameters/WarehouseFilter"
+        - $ref: "#/components/parameters/LocationFilter"
+        - $ref: "#/components/parameters/ProductFilter"
+        - $ref: "#/components/parameters/CategoryFilter"
+        - $ref: "#/components/parameters/SearchFilter"
+        - $ref: "#/components/parameters/StartDate"
+        - $ref: "#/components/parameters/EndDate"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/WarehouseReportSort"
+      responses:
+        "200": { description: Paginated warehouse-level inventory aggregates }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /reports/low-stock:
+    get:
+      tags: [Reports]
+      summary: Low-stock inventory report
+      description: Authenticated active users; ADMIN sees all warehouses, while MANAGER and STAFF are limited to permitted warehouses.
+      parameters:
+        - $ref: "#/components/parameters/WarehouseFilter"
+        - $ref: "#/components/parameters/LocationFilter"
+        - $ref: "#/components/parameters/ProductFilter"
+        - $ref: "#/components/parameters/CategoryFilter"
+        - $ref: "#/components/parameters/SearchFilter"
+        - $ref: "#/components/parameters/StartDate"
+        - $ref: "#/components/parameters/EndDate"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/InventorySort"
+      responses:
+        "200": { description: Paginated low-stock inventory records }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /reports/stock-movements:
+    get:
+      tags: [Reports]
+      summary: Stock movement report
+      description: Authenticated active users; movement results are limited to permitted warehouses.
+      parameters:
+        - $ref: "#/components/parameters/WarehouseFilter"
+        - $ref: "#/components/parameters/LocationFilter"
+        - $ref: "#/components/parameters/ProductFilter"
+        - $ref: "#/components/parameters/MovementTypeFilter"
+        - $ref: "#/components/parameters/PerformedByFilter"
+        - $ref: "#/components/parameters/SearchFilter"
+        - $ref: "#/components/parameters/StartDate"
+        - $ref: "#/components/parameters/EndDate"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/MovementSort"
+      responses:
+        "200": { description: Paginated movement records }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /reports/transfers:
+    get:
+      tags: [Reports]
+      summary: Transfer report
+      description: Authenticated active users; explicit warehouse filters must be in the user's permitted warehouse scope.
+      parameters:
+        - $ref: "#/components/parameters/WarehouseFilter"
+        - $ref: "#/components/parameters/SourceWarehouseFilter"
+        - $ref: "#/components/parameters/DestinationWarehouseFilter"
+        - $ref: "#/components/parameters/ProductFilter"
+        - $ref: "#/components/parameters/TransferStatusFilter"
+        - $ref: "#/components/parameters/InitiatedByFilter"
+        - $ref: "#/components/parameters/SearchFilter"
+        - $ref: "#/components/parameters/StartDate"
+        - $ref: "#/components/parameters/EndDate"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/TransferSort"
+      responses:
+        "200": { description: Paginated transfer records }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Id:
+      type: string
+      pattern: "^[a-fA-F0-9]{24}$"
+      example: 507f1f77bcf86cd799439011
+    Role:
+      type: string
+      enum: [ADMIN, MANAGER, STAFF]
+    Error:
+      type: object
+      required: [success, message, data]
+      properties:
+        success: { type: boolean, example: false }
+        message: { type: string }
+        data: { nullable: true, type: object, example: null }
+        details: { type: object, additionalProperties: true }
+    Page:
+      type: object
+      properties:
+        page: { type: integer }
+        limit: { type: integer, maximum: 50 }
+        totalItems: { type: integer }
+        totalPages: { type: integer }
+    StockOperation:
+      type: object
+      required: [productId, warehouseId, locationId, quantity, reason]
+      properties:
+        productId: { $ref: "#/components/schemas/Id" }
+        warehouseId: { $ref: "#/components/schemas/Id" }
+        locationId: { $ref: "#/components/schemas/Id" }
+        quantity: { type: number, exclusiveMinimum: 0 }
+        reason: { type: string }
+        reference: { type: string }
+        notes: { type: string }
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/Id" }
+    WarehouseId:
+      name: warehouseId
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/Id" }
+    LocationId:
+      name: locationId
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/Id" }
+    CategoryId:
+      name: categoryId
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/Id" }
+    ProductId:
+      name: productId
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/Id" }
+    InventoryId:
+      name: inventoryId
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/Id" }
+    MovementId:
+      name: movementId
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/Id" }
+    TransferId:
+      name: transferId
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/Id" }
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, minLength: 8, maxLength: 128 }
+    WarehouseFilter:
+      name: warehouse
+      in: query
+      description: Filter by a warehouse visible to the authenticated user.
+      schema: { $ref: "#/components/schemas/Id" }
+    LocationFilter:
+      name: location
+      in: query
+      schema: { $ref: "#/components/schemas/Id" }
+    ProductFilter:
+      name: product
+      in: query
+      schema: { $ref: "#/components/schemas/Id" }
+    CategoryFilter:
+      name: category
+      in: query
+      schema: { $ref: "#/components/schemas/Id" }
+    StockStatusFilter:
+      name: stockStatus
+      in: query
+      schema: { type: string, enum: [IN_STOCK, LOW_STOCK, OUT_OF_STOCK] }
+    MovementTypeFilter:
+      name: movementType
+      in: query
+      schema: { type: string, enum: [STOCK_IN, STOCK_OUT, ADJUSTMENT_IN, ADJUSTMENT_OUT, TRANSFER_IN, TRANSFER_OUT] }
+    PerformedByFilter:
+      name: performedBy
+      in: query
+      schema: { $ref: "#/components/schemas/Id" }
+    SourceWarehouseFilter:
+      name: sourceWarehouse
+      in: query
+      schema: { $ref: "#/components/schemas/Id" }
+    DestinationWarehouseFilter:
+      name: destinationWarehouse
+      in: query
+      schema: { $ref: "#/components/schemas/Id" }
+    TransferStatusFilter:
+      name: transferStatus
+      in: query
+      schema: { type: string, enum: [PENDING, APPROVED, COMPLETED, REJECTED, CANCELLED] }
+    InitiatedByFilter:
+      name: initiatedBy
+      in: query
+      schema: { $ref: "#/components/schemas/Id" }
+    SearchFilter:
+      name: search
+      in: query
+      schema: { type: string }
+    StartDate:
+      name: startDate
+      in: query
+      description: ISO-8601 date or timestamp. Date-only values use UTC.
+      schema: { type: string }
+    EndDate:
+      name: endDate
+      in: query
+      description: Inclusive ISO-8601 date or timestamp; a date-only value includes the full UTC calendar day.
+      schema: { type: string }
+    InventorySort:
+      name: sort
+      in: query
+      schema: { type: string, enum: [updatedAt, -updatedAt, quantity, -quantity, productName, -productName, sku, -sku, createdAt, -createdAt] }
+    WarehouseReportSort:
+      name: sort
+      in: query
+      schema: { type: string, enum: [warehouseName, -warehouseName, totalInventoryUnits, -totalInventoryUnits, productCount, -productCount, locationCount, -locationCount] }
+    MovementSort:
+      name: sort
+      in: query
+      schema: { type: string }
+    TransferSort:
+      name: sort
+      in: query
+      schema: { type: string }
+  responses:
+    ValidationError:
+      description: Invalid input or filter.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Unauthorized:
+      description: Missing, invalid, expired, or inactive-user authentication.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: Authenticated user lacks the required role or warehouse scope.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: Requested resource was not found.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Conflict:
+      description: Duplicate record, insufficient stock, or invalid state transition.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    ServerError:
+      description: Unexpected server error.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    TransactionUnavailable:
+      description: MongoDB must be configured as a replica set or sharded cluster.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
