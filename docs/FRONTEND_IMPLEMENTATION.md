@@ -908,10 +908,10 @@ Paginated responses include:
 
 ### CORS, environment, and deployment health
 
-- Configure backend `FRONTEND_URL` to the exact frontend HTTPS origin(s), comma-separated if there are several. Production rejects missing, non-HTTPS, or path-bearing origins and does not enable credentialed wildcard CORS.
+- In Render's backend service **Environment** settings, set `FRONTEND_URL` to the exact deployed frontend HTTPS origin (for example, `https://your-frontend.onrender.com`), not the backend URL. Do not include a path or `/api/v1`; comma-separate multiple exact origins. The production server intentionally exits at startup if `FRONTEND_URL` is missing or invalid.
 - Configure frontend `REACT_APP_API_URL` to the API origin plus `/api/v1`; include credentials for refresh-cookie operations.
 - `GET https://warehouse-management-backend-tqc9.onrender.com/api/v1/health` reports server/database status. It returns HTTP 200 only when MongoDB is connected; otherwise it returns HTTP 503, which is the deployment readiness signal. Do not treat 503 as an authenticated API response.
-- Production requires MongoDB, two separate high-entropy JWT secrets, valid token lifetimes, and a configured frontend origin. Do not expose credentials or bootstrap passwords in client code or documentation.
+- Production requires MongoDB, separate high-entropy `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET` values (at least 32 characters each, at least 16 distinct characters, and not placeholders), valid token lifetimes, and a configured frontend origin. If Render logs `Production JWT secrets must be unique, random values and must not use placeholders`, set both secrets in the backend service's **Environment** settings using two separately generated values; never reuse the same value or use `.env.example` samples. Do not expose credentials or bootstrap passwords in client code or documentation.
 
 ### Compatibility changes and deployment configuration
 

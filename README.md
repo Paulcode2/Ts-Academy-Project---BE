@@ -51,6 +51,8 @@ Generate separate high-entropy secrets without printing or storing them in sourc
 node -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'))"
 ```
 
+Run the command twice and set the two different outputs as `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET` in Render's **Environment** settings. Each value must be at least 32 characters, contain at least 16 distinct characters, and not contain placeholder words such as `replace`, `change`, `example`, `placeholder`, or `password`. Do not use the sample values from `.env.example`, reuse one secret for both variables, or share the generated values in source control or chat.
+
 Startup requires `NODE_ENV=development` or `NODE_ENV=production` explicitly and fails when JWT secrets are missing or identical. Production additionally rejects weak/placeholders, requires valid token lifetimes and HTTPS `FRONTEND_URL` origins, and fails if the database cannot be reached. CORS allows only exact configured browser origins; requests without an `Origin` header remain usable for health checks and server-to-server clients.
 
 ## Development and production
@@ -99,7 +101,7 @@ The health endpoint reports application and database status and returns HTTP 503
 
 1. Create a Node web service from the backend directory; use Node 22+.
 2. Set the build command to `npm ci` and the start command to `npm start`.
-3. Configure `NODE_ENV=production`, `MONGODB_URI`, distinct high-entropy JWT secrets, token lifetimes, and exact HTTPS `FRONTEND_URL` origin(s). Render supplies `PORT`.
+3. In Render's **Environment** settings, configure `NODE_ENV=production`, `MONGODB_URI`, distinct high-entropy `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET` values (generate two separate values using the command above), token lifetimes, and `FRONTEND_URL` with the exact HTTPS origin of the deployed frontend (for example, `https://your-frontend.onrender.com`). `FRONTEND_URL` is the frontend's origin, not this backend's URL; do not include a path or `/api/v1`. Multiple frontend origins may be comma-separated. Render supplies `PORT`. The service intentionally refuses to start in production if these settings are missing or invalid.
 4. Use a MongoDB Atlas replica-set connection string, allow the Render service's egress to reach Atlas, and restrict Atlas network access to the deployment's approved network policy.
 5. Set the platform health-check path to `/api/v1/health`. A healthy result requires a connected database.
 6. Run the administrator bootstrap as a one-off secure operation, then remove its temporary environment values.
