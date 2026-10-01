@@ -8,10 +8,12 @@ const {
   Category,
   Product,
 } = require("../src/models");
+const { isStrongPassword } = require("../src/config/auth");
+const { connectDB } = require("../src/config/db");
 
 const seedDevelopmentData = async () => {
-  if (process.env.NODE_ENV === "production") {
-    throw new Error("Development seeding is disabled in production.");
+  if (process.env.NODE_ENV !== "development") {
+    throw new Error("Development seeding requires NODE_ENV=development.");
   }
 
   const mongoUri = process.env.MONGODB_URI;
@@ -19,16 +21,30 @@ const seedDevelopmentData = async () => {
   if (!mongoUri) {
     throw new Error("MONGODB_URI is required for seeding.");
   }
+  const databaseName = decodeURIComponent(new URL(mongoUri).pathname.slice(1));
+  if (!/(?:^|[_-])dev(?:$|[_-])/i.test(databaseName)) {
+    throw new Error("Development seeding requires a database name containing a dev marker.");
+  }
+  if (
+    !process.env.ADMIN_FIRST_NAME ||
+    !process.env.ADMIN_LAST_NAME ||
+    !process.env.ADMIN_EMAIL ||
+    !isStrongPassword(process.env.ADMIN_PASSWORD || "")
+  ) {
+    throw new Error(
+      "Set ADMIN_FIRST_NAME, ADMIN_LAST_NAME, ADMIN_EMAIL, and a unique strong ADMIN_PASSWORD before seeding.",
+    );
+  }
 
-  await mongoose.connect(mongoUri);
+  await connectDB();
 
   const adminUser = await User.findOneAndUpdate(
-    { email: "admin@warehouse.local" },
+    { email: process.env.ADMIN_EMAIL.trim().toLowerCase() },
     {
-      firstName: "System",
-      lastName: "Admin",
-      email: "admin@warehouse.local",
-      password: "ChangeMe123!",
+      firstName: process.env.ADMIN_FIRST_NAME,
+      lastName: process.env.ADMIN_LAST_NAME,
+      email: process.env.ADMIN_EMAIL.trim().toLowerCase(),
+      password: process.env.ADMIN_PASSWORD,
       role: "ADMIN",
       isActive: true,
     },

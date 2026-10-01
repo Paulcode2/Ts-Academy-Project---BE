@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Warehouse Management backend API",
   "main": "src/server.js",
+  "engines": {
+    "node": ">=22"
+  },
   "private": true,
   "scripts": {
     "dev": "node --watch src/server.js",

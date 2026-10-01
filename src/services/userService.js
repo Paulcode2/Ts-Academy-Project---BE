@@ -1,8 +1,9 @@
-const { User, Warehouse } = require("../models");
+const { User, Warehouse, RefreshToken } = require("../models");
 const {
   AppError,
   parsePagination,
   buildPaginatedResponse,
+  escapeRegex,
 } = require("../utils");
 const { isStrongPassword } = require("../config/auth");
 
@@ -60,10 +61,16 @@ const listUsers = async (query = {}) => {
 
   if (query.search) {
     const searchText = String(query.search).trim();
+    if (searchText.length > 100) {
+      throw new AppError("search cannot exceed 100 characters.", 400, {
+        field: "search",
+      });
+    }
+    const escapedSearch = escapeRegex(searchText);
     filters.$or = [
-      { firstName: { $regex: searchText, $options: "i" } },
-      { lastName: { $regex: searchText, $options: "i" } },
-      { email: { $regex: searchText, $options: "i" } },
+      { firstName: { $regex: escapedSearch, $options: "i" } },
+      { lastName: { $regex: escapedSearch, $options: "i" } },
+      { email: { $regex: escapedSearch, $options: "i" } },
     ];
   }
 
@@ -114,6 +121,9 @@ const updateUserDetails = async (userId, updates) => {
 
   if (!user) {
     throw new AppError("User not found.", 404);
+  }
+  if (filteredUpdates.isActive === false) {
+    await RefreshToken.deleteMany({ user: user._id });
   }
 
   return user.toJSON();
@@ -171,6 +181,9 @@ const toggleUserStatus = async (userId, isActive) => {
   if (!user) {
     throw new AppError("User not found.", 404);
   }
+  if (!isActive) {
+    await RefreshToken.deleteMany({ user: user._id });
+  }
 
   return user.toJSON();
 };
@@ -189,9 +202,9 @@ const resetUserPassword = async (userId, newPassword) => {
     throw new AppError("User not found.", 404);
   }
 
+  await RefreshToken.deleteMany({ user: user._id });
   user.password = newPassword;
   await user.save();
-  await require("../models").RefreshToken.deleteMany({ user: user._id });
 
   return user.toJSON();
 };

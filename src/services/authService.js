@@ -66,6 +66,9 @@ const refreshUserSession = async (refreshTokenValue) => {
   } catch (error) {
     throw new AppError("Refresh token is invalid or expired.", 401);
   }
+  if (payload.type !== "refresh" || !payload.sub) {
+    throw new AppError("Refresh token is invalid or expired.", 401);
+  }
 
   const user = await User.findById(payload.sub);
 
@@ -74,7 +77,7 @@ const refreshUserSession = async (refreshTokenValue) => {
   }
 
   const tokenHash = hashToken(refreshTokenValue);
-  const storedSession = await RefreshToken.findOne({
+  const storedSession = await RefreshToken.findOneAndDelete({
     user: user._id,
     tokenHash,
     revoked: false,
@@ -88,7 +91,6 @@ const refreshUserSession = async (refreshTokenValue) => {
   const newAccessToken = createAccessToken(user);
   const newRefreshToken = createRefreshToken(user);
 
-  await RefreshToken.deleteMany({ user: user._id });
   await RefreshToken.create({
     user: user._id,
     tokenHash: hashToken(newRefreshToken),
@@ -108,13 +110,20 @@ const logoutUser = async (refreshTokenValue) => {
     return { revoked: false };
   }
 
+  let payload;
   try {
-    const payload = verifyRefreshToken(refreshTokenValue);
-    await RefreshToken.deleteMany({ user: payload.sub });
-    return { revoked: true };
+    payload = verifyRefreshToken(refreshTokenValue);
   } catch (error) {
     return { revoked: false };
   }
+  if (payload.type !== "refresh" || !payload.sub) {
+    return { revoked: false };
+  }
+  const result = await RefreshToken.deleteOne({
+    user: payload.sub,
+    tokenHash: hashToken(refreshTokenValue),
+  });
+  return { revoked: result.deletedCount > 0 };
 };
 
 const changeUserPassword = async (userId, currentPassword, newPassword) => {
@@ -130,9 +139,9 @@ const changeUserPassword = async (userId, currentPassword, newPassword) => {
     throw new AppError("Current password is incorrect.", 401);
   }
 
+  await RefreshToken.deleteMany({ user: user._id });
   user.password = newPassword;
   await user.save();
-  await RefreshToken.deleteMany({ user: user._id });
 
   return user.toJSON();
 };

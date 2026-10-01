@@ -12,10 +12,11 @@ const errorHandler = (error, req, res, next) => {
         ? normalizeMongooseValidationError(error)
         : error;
   const statusCode = normalizedError.statusCode || 500;
+  const isInternalError = statusCode >= 500;
 
   const payload = {
     ...errorResponse(
-      process.env.NODE_ENV === "production"
+      process.env.NODE_ENV === "production" && isInternalError
         ? "Something went wrong"
         : normalizedError.message || "Something went wrong",
       null,
@@ -23,6 +24,7 @@ const errorHandler = (error, req, res, next) => {
   };
 
   if (
+    (!isInternalError || process.env.NODE_ENV !== "production") &&
     normalizedError.details &&
     Object.keys(normalizedError.details).length > 0
   ) {
@@ -33,7 +35,11 @@ const errorHandler = (error, req, res, next) => {
     payload.stack = normalizedError.stack;
   }
 
-  if (normalizedError.name === "ValidationError" && normalizedError.errors) {
+  if (
+    (!isInternalError || process.env.NODE_ENV !== "production") &&
+    normalizedError.name === "ValidationError" &&
+    normalizedError.errors
+  ) {
     payload.errors = normalizedError.errors;
   }
 

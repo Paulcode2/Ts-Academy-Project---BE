@@ -1,3 +1,5 @@
+require("./helpers/env");
+
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
@@ -31,9 +33,7 @@ const {
   RefreshToken,
 } = require("../src/models");
 
-const DB_URI =
-  process.env.MONGODB_URI ||
-  "mongodb://127.0.0.1:27017/warehouse_management_test";
+const { testDatabaseUri: DB_URI } = require("./helpers/database");
 
 const createTestUser = async (overrides = {}) => {
   const baseUser = {
@@ -333,4 +333,40 @@ test("pagination response contract and app error utilities remain consistent", a
   assert.deepEqual(paginated.success, true);
   assert.equal(paginated.pagination.page, 1);
   assert.equal(paginated.pagination.limit, 20);
+});
+
+test("operational query and uniqueness indexes are present in MongoDB", async () => {
+  await Promise.all([
+    User.init(),
+    Warehouse.init(),
+    Location.init(),
+    Category.init(),
+    Product.init(),
+    Inventory.init(),
+    StockMovement.init(),
+    Transfer.init(),
+    RefreshToken.init(),
+  ]);
+
+  const [users, warehouses, locations, inventory, movements, transfers] =
+    await Promise.all([
+      User.collection.indexes(),
+      Warehouse.collection.indexes(),
+      Location.collection.indexes(),
+      Inventory.collection.indexes(),
+      StockMovement.collection.indexes(),
+      Transfer.collection.indexes(),
+    ]);
+  const hasIndex = (indexes, name, unique = false) =>
+    indexes.some((index) => index.name === name && (!unique || index.unique));
+
+  assert.ok(hasIndex(users, "email_1", true));
+  assert.ok(hasIndex(warehouses, "code_1", true));
+  assert.ok(hasIndex(locations, "warehouse_1_code_1", true));
+  assert.ok(hasIndex(inventory, "product_1_location_1", true));
+  assert.ok(hasIndex(inventory, "warehouse_1_updatedAt_-1"));
+  assert.ok(hasIndex(movements, "warehouse_1_createdAt_-1"));
+  assert.ok(hasIndex(movements, "performedBy_1_createdAt_-1"));
+  assert.ok(hasIndex(transfers, "sourceWarehouse_1_createdAt_-1"));
+  assert.ok(hasIndex(transfers, "status_1_createdAt_-1"));
 });
