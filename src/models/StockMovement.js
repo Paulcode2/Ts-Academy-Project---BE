@@ -65,6 +65,9 @@ const stockMovementSchema = new mongoose.Schema(
 
 stockMovementSchema.index({ product: 1, createdAt: -1 });
 stockMovementSchema.index({ warehouse: 1, location: 1, createdAt: -1 });
+stockMovementSchema.index({ warehouse: 1, createdAt: -1 });
+stockMovementSchema.index({ performedBy: 1, createdAt: -1 });
+stockMovementSchema.index({ movementType: 1, createdAt: -1 });
 
 stockMovementSchema.pre("validate", async function (next) {
   try {

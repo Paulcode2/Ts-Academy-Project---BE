@@ -81,6 +81,10 @@ const transferSchema = new mongoose.Schema(
   },
 );
 
+transferSchema.index({ sourceWarehouse: 1, createdAt: -1 });
+transferSchema.index({ destinationWarehouse: 1, createdAt: -1 });
+transferSchema.index({ status: 1, createdAt: -1 });
+
 transferSchema.pre("validate", async function (next) {
   if (
     this.sourceLocation &&

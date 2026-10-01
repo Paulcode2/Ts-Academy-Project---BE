@@ -309,6 +309,18 @@ const buildTransferFilter = async (user, query) => {
       $options: "i",
     };
   }
+  if (query.warehouse) {
+    const warehouseId = parseId(query.warehouse, "warehouse");
+    filter.$and = [
+      ...(filter.$and || []),
+      {
+        $or: [
+          { sourceWarehouse: warehouseId },
+          { destinationWarehouse: warehouseId },
+        ],
+      },
+    ];
+  }
   try {
     const range = validateDateRange({
       startDate: query.startDate,
@@ -327,10 +339,15 @@ const buildTransferFilter = async (user, query) => {
     const managed = await Warehouse.find({ manager: user._id }).distinct("_id");
     managed.forEach((id) => accessible.add(String(id)));
     const accessibleIds = [...accessible].map((id) => new mongoose.Types.ObjectId(id));
-    filter.$or = [
-      { sourceWarehouse: { $in: accessibleIds } },
-      { destinationWarehouse: { $in: accessibleIds } },
-      { initiatedBy: user._id },
+    filter.$and = [
+      ...(filter.$and || []),
+      {
+        $or: [
+          { sourceWarehouse: { $in: accessibleIds } },
+          { destinationWarehouse: { $in: accessibleIds } },
+          { initiatedBy: user._id },
+        ],
+      },
     ];
   }
   return filter;
