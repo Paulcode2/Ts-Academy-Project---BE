@@ -19,10 +19,7 @@ const runAuthConfig = ({ access, refresh }) => {
 
   return spawnSync(
     process.execPath,
-    [
-      "-e",
-      'require("./src/config/auth").validateAuthEnvironment()',
-    ],
+    ["-e", 'require("./src/config/auth").validateAuthEnvironment()'],
     {
       cwd: path.resolve(__dirname, ".."),
       env,
@@ -87,17 +84,24 @@ test("production runtime requires an exact HTTPS origin and a valid port", () =>
     }),
     {
       port: 3000,
-      frontendOrigins: [
-        "https://warehouse.example",
-        "https://admin.example",
-      ],
+      frontendOrigins: ["https://warehouse.example", "https://admin.example"],
+    },
+  );
+  assert.deepEqual(
+    validateRuntimeEnvironment({
+      NODE_ENV: "production",
+      PORT: "3000",
+      FRONTEND_URL: "http://localhost:5173",
+    }),
+    {
+      port: 3000,
+      frontendOrigins: ["http://localhost:5173"],
     },
   );
 });
 
 test("test database configuration refuses a production URI", () => {
-  const defaultTestUri =
-    "mongodb://127.0.0.1:27017/warehouse_management_test";
+  const defaultTestUri = "mongodb://127.0.0.1:27017/warehouse_management_test";
   const sameUri = spawnSync(
     process.execPath,
     ["-e", 'require("./tests/helpers/database")'],

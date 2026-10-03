@@ -5,9 +5,8 @@ const validateRuntimeEnvironment = (env = process.env) => {
     );
   }
 
-  const port = env.PORT === undefined || env.PORT === ""
-    ? 5000
-    : Number(env.PORT);
+  const port =
+    env.PORT === undefined || env.PORT === "" ? 5000 : Number(env.PORT);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new Error("PORT must be an integer between 1 and 65535.");
   }
@@ -29,12 +28,18 @@ const validateRuntimeEnvironment = (env = process.env) => {
       } catch {
         throw new Error("FRONTEND_URL must contain valid origins.");
       }
-      if (
-        parsedOrigin.protocol !== "https:" ||
-        parsedOrigin.origin !== origin
-      ) {
+
+      const normalizedHostname = parsedOrigin.hostname.replace(/^\[|\]$/g, "");
+      const isLocalHostOrigin = ["localhost", "127.0.0.1", "::1"].includes(
+        normalizedHostname,
+      );
+      const isAllowedProtocol =
+        parsedOrigin.protocol === "https:" ||
+        (isLocalHostOrigin && parsedOrigin.protocol === "http:");
+
+      if (!isAllowedProtocol || parsedOrigin.origin !== origin) {
         throw new Error(
-          "Each production FRONTEND_URL must be an HTTPS origin without a path.",
+          "Each production FRONTEND_URL must be an exact HTTPS origin without a path, or an explicit localhost HTTP origin for local testing.",
         );
       }
     }

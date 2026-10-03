@@ -45,19 +45,55 @@ test("valid login returns access token and refresh cookie without password", asy
     role: "ADMIN",
   });
 
-  const response = await request(app)
-    .post("/api/v1/auth/login")
-    .send({
-      email: "admin@example.com",
-      password: "StrongPassword123!",
-    })
-    .expect(200);
+  const previous = process.env.FRONTEND_URL;
+  process.env.FRONTEND_URL = "http://localhost:5173";
 
-  assert.equal(response.body.success, true);
-  assert.ok(response.body.data.accessToken);
-  assert.ok(response.headers["set-cookie"][0].includes("refreshToken="));
-  assert.equal(response.body.data.user.password, undefined);
-  assert.equal(response.body.data.user.email, user.email);
+  try {
+    const response = await request(app)
+      .post("/api/v1/auth/login")
+      .set("Origin", "http://localhost:5173")
+      .send({
+        email: "admin@example.com",
+        password: "StrongPassword123!",
+      })
+      .expect(200);
+
+    assert.equal(response.body.success, true);
+    assert.ok(response.body.data.accessToken);
+    assert.equal(
+      response.headers["access-control-allow-origin"],
+      "http://localhost:5173",
+    );
+    assert.equal(response.headers["access-control-allow-credentials"], "true");
+    assert.ok(response.headers["set-cookie"][0].includes("refreshToken="));
+    assert.equal(response.body.data.user.password, undefined);
+    assert.equal(response.body.data.user.email, user.email);
+  } finally {
+    if (previous === undefined) delete process.env.FRONTEND_URL;
+    else process.env.FRONTEND_URL = previous;
+  }
+});
+
+test("unauthorized refresh still includes CORS headers for the configured origin", async () => {
+  const previous = process.env.FRONTEND_URL;
+  process.env.FRONTEND_URL = "http://localhost:5173";
+
+  try {
+    const response = await request(app)
+      .post("/api/v1/auth/refresh")
+      .set("Origin", "http://localhost:5173")
+      .expect(401);
+
+    assert.equal(response.body.success, false);
+    assert.equal(
+      response.headers["access-control-allow-origin"],
+      "http://localhost:5173",
+    );
+    assert.equal(response.headers["access-control-allow-credentials"], "true");
+  } finally {
+    if (previous === undefined) delete process.env.FRONTEND_URL;
+    else process.env.FRONTEND_URL = previous;
+  }
 });
 
 test("invalid login returns a generic error without revealing account existence", async () => {
@@ -158,7 +194,9 @@ test("refresh flow rotates refresh tokens and logout invalidates sessions", asyn
   assert.equal(logoutResponse.body.success, true);
   assert.equal(logoutResponse.body.message, "Logged out successfully.");
 
-  const remainingSessions = await RefreshToken.countDocuments({ user: user._id });
+  const remainingSessions = await RefreshToken.countDocuments({
+    user: user._id,
+  });
   assert.equal(remainingSessions, 0);
 });
 
